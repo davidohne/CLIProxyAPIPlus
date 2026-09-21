@@ -1758,9 +1758,9 @@ func ensureModelMaxTokens(body []byte, modelID string) []byte {
 	}
 
 	for _, provider := range registry.GetGlobalRegistry().GetModelProviders(strings.TrimSpace(modelID)) {
-		if strings.EqualFold(provider, "claude") {
+		if strings.EqualFold(provider, "claude") || strings.EqualFold(provider, "zai") {
 			maxTokens := defaultModelMaxTokens
-			if info := registry.GetGlobalRegistry().GetModelInfo(strings.TrimSpace(modelID), "claude"); info != nil && info.MaxCompletionTokens > 0 {
+			if info := registry.GetGlobalRegistry().GetModelInfo(strings.TrimSpace(modelID), provider); info != nil && info.MaxCompletionTokens > 0 {
 				maxTokens = info.MaxCompletionTokens
 			}
 			body, _ = sjson.SetBytes(body, "max_tokens", maxTokens)

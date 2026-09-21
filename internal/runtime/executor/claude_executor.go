@@ -141,11 +141,18 @@ func NewClaudeExecutor(cfg *config.Config) *ClaudeExecutor { return &ClaudeExecu
 
 func (e *ClaudeExecutor) Identifier() string { return "claude" }
 
-func (e *ClaudeExecutor) upstreamRequestLogProvider() string {
-	if provider := strings.TrimSpace(e.requestLogProvider); provider != "" {
-		return provider
+func (e *ClaudeExecutor) ProviderKey() string {
+	if e != nil {
+		if provider := strings.TrimSpace(e.requestLogProvider); provider != "" {
+			return provider
+		}
+		return e.Identifier()
 	}
-	return e.Identifier()
+	return "claude"
+}
+
+func (e *ClaudeExecutor) upstreamRequestLogProvider() string {
+	return e.ProviderKey()
 }
 
 func (e *ClaudeExecutor) upstreamModel(baseModel string) string {
@@ -217,8 +224,9 @@ func (e *ClaudeExecutor) PrepareRequest(req *http.Request, auth *cliproxyauth.Au
 		return nil
 	}
 	useAPIKey := auth != nil && auth.Attributes != nil && strings.TrimSpace(auth.Attributes["api_key"]) != ""
+	forceAPIKey := auth != nil && auth.Attributes != nil && strings.EqualFold(strings.TrimSpace(auth.Attributes["anthropic_auth_scheme"]), "x-api-key")
 	isAnthropicBase := isAnthropicUpstreamURL(req.URL)
-	if isAnthropicBase && useAPIKey {
+	if forceAPIKey || (isAnthropicBase && useAPIKey) {
 		req.Header.Del("Authorization")
 		req.Header.Set("x-api-key", apiKey)
 	} else {
