@@ -125,6 +125,7 @@ PackyCode provides special discounts for our software users: register using <a h
 - OpenAI Codex support (GPT models) via OAuth login
 - Claude Code support via OAuth login
 - Grok Build support via OAuth login
+- Z.AI / ZCode (GLM) coding plan support via OAuth login with automatic coding-plan API key provisioning
 - Qoder support via OAuth login
 - Amp CLI and IDE extensions support with provider routing
 - Streaming, non-streaming, and WebSocket responses where supported

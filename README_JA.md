@@ -118,6 +118,7 @@ PackyCodeは当ソフトウェアのユーザーに特別割引を提供して�
 - OAuthログインによるOpenAI Codexサポート（GPTモデル）
 - OAuthログインによるClaude Codeサポート
 - OAuthログインによるGrok Buildサポート
+- OAuthログインによるZ.AI / ZCode（GLM）コーディングプランのサポート（標準APIキーを自動発行、手動入力不要）
 - OAuthログインによるQoderサポート
 - プロバイダールーティングによるAmp CLIおよびIDE拡張機能のサポート
 - ストリーミング、非ストリーミング、および対応環境でのWebSocketレスポンス
