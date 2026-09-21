@@ -25,6 +25,8 @@ var oauthProviders = []oauthProvider{
 	{"Antigravity", "antigravity-auth-url", "🟪", false},
 	{"Kimi", "kimi-auth-url", "🟫", true},
 	{"xAI", "xai-auth-url", "⬛", true},
+	{"Z.AI / ZCode (International)", "zai-auth-url", "🟦", false},
+	{"BigModel / ZCode (China)", "bigmodel-auth-url", "🟥", false},
 }
 
 // oauthTabModel handles OAuth login flows.
@@ -144,10 +146,18 @@ func (m oauthTabModel) Update(msg tea.Msg) (oauthTabModel, tea.Cmd) {
 			m.viewport.SetContent(m.renderContent())
 			return m, m.pollOAuthStatus(msg.state, msg.expiresIn, true, msg.generation)
 		}
-		m.callbackInput.Focus()
-		m.inputActive = true
+		if m.supportsManualCallback() {
+			m.callbackInput.Focus()
+			m.inputActive = true
+		} else {
+			m.callbackInput.Blur()
+			m.inputActive = false
+		}
 		m.viewport.SetContent(m.renderContent())
-		return m, tea.Batch(textinput.Blink, m.pollOAuthStatus(msg.state, msg.expiresIn, false, msg.generation))
+		if m.inputActive {
+			return m, tea.Batch(textinput.Blink, m.pollOAuthStatus(msg.state, msg.expiresIn, false, msg.generation))
+		}
+		return m, m.pollOAuthStatus(msg.state, msg.expiresIn, false, msg.generation)
 
 	case oauthPollMsg:
 		if !shouldAcceptOAuthPoll(msg, m.authState, m.pollGeneration, m.state) {
@@ -208,7 +218,7 @@ func (m oauthTabModel) Update(msg tea.Msg) (oauthTabModel, tea.Cmd) {
 		if m.state == oauthRemote {
 			switch msg.String() {
 			case "c", "C":
-				if m.deviceFlow {
+				if m.deviceFlow || !m.supportsManualCallback() {
 					return m, nil
 				}
 				// Re-activate input
@@ -358,6 +368,8 @@ func (m oauthTabModel) submitCallback(callbackURL string) tea.Cmd {
 					providerKey = "kimi"
 				case "xai-auth-url":
 					providerKey = "xai"
+				case "zai-auth-url", "bigmodel-auth-url":
+					providerKey = "zai"
 				}
 				break
 			}
@@ -374,6 +386,16 @@ func (m oauthTabModel) submitCallback(callbackURL string) tea.Cmd {
 		}
 		return oauthCallbackSubmitMsg{}
 	}
+}
+
+func (m oauthTabModel) supportsManualCallback() bool {
+	for _, p := range oauthProviders {
+		if p.name != m.providerName {
+			continue
+		}
+		return p.apiPath != "zai-auth-url"
+	}
+	return !m.deviceFlow
 }
 
 func (m oauthTabModel) pollOAuthStatus(state string, expiresIn int, deviceFlow bool, generation int) tea.Cmd {
@@ -565,19 +587,20 @@ func (m oauthTabModel) renderRemoteMode() string {
 	sb.WriteString(helpStyle.Render(T("oauth_remote_hint")))
 	sb.WriteString("\n\n")
 
-	// Callback URL input
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorInfo).Render(T("oauth_callback_url")))
-	sb.WriteString("\n")
-
-	if m.inputActive {
-		sb.WriteString(m.callbackInput.View())
+	if m.supportsManualCallback() {
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorInfo).Render(T("oauth_callback_url")))
 		sb.WriteString("\n")
-		sb.WriteString(helpStyle.Render("  " + T("enter_submit") + " • " + T("esc_cancel")))
-	} else {
-		sb.WriteString(helpStyle.Render(T("oauth_press_c")))
-	}
 
-	sb.WriteString("\n\n")
+		if m.inputActive {
+			sb.WriteString(m.callbackInput.View())
+			sb.WriteString("\n")
+			sb.WriteString(helpStyle.Render("  " + T("enter_submit") + " • " + T("esc_cancel")))
+		} else {
+			sb.WriteString(helpStyle.Render(T("oauth_press_c")))
+		}
+
+		sb.WriteString("\n\n")
+	}
 	sb.WriteString(warningStyle.Render(T("oauth_waiting")))
 
 	return sb.String()
