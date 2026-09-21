@@ -19,6 +19,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/codex"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/kimi"
 	xaiauth "github.com/router-for-me/CLIProxyAPI/v7/internal/auth/xai"
+	zaiauth "github.com/router-for-me/CLIProxyAPI/v7/internal/auth/zai"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
@@ -715,6 +716,147 @@ func (h *Handler) RequestKimiToken(c *gin.Context) {
 		response["expires_in"] = deviceFlow.ExpiresIn
 	}
 	c.JSON(200, response)
+}
+
+func (h *Handler) RequestZAIToken(c *gin.Context) {
+	h.requestZAIToken(c, zaiauth.ProviderZAI)
+}
+
+func (h *Handler) RequestBigModelToken(c *gin.Context) {
+	h.requestZAIToken(c, zaiauth.ProviderBigModel)
+}
+
+func (h *Handler) requestZAIToken(c *gin.Context, provider string) {
+	ctx := context.Background()
+	ctx = PopulateAuthContext(ctx, c)
+
+	if p := strings.TrimSpace(c.Query("provider")); p != "" {
+		provider = p
+	}
+	provider = zaiauth.NormalizeProvider(provider)
+
+	fmt.Printf("Initializing Z.AI authentication (provider: %s)...\n", provider)
+
+	state := fmt.Sprintf("zai-%d", time.Now().UnixNano())
+	zaiAuth := zaiauth.NewZAIAuth(h.cfg, provider, "", 0)
+
+	init, errInit := zaiAuth.StartFlow(ctx)
+	if errInit != nil {
+		log.Errorf("Failed to generate authorization URL: %v", errInit)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate authorization url"})
+		return
+	}
+
+	RegisterOAuthSession(state, "zai")
+
+	go func() {
+		fmt.Println("Waiting for authentication...")
+		if provider == zaiauth.ProviderBigModel {
+			stop := make(chan struct{})
+			defer close(stop)
+			go h.watchManualZAICallback(state, zaiAuth, stop)
+		}
+
+		ready, errWait := zaiAuth.WaitForAuthorization(ctx, init)
+		if errWait != nil {
+			if !IsOAuthSessionPending(state, "zai") {
+				return
+			}
+			SetOAuthSessionError(state, oauthSessionErrorWithCause("Authentication failed", errWait))
+			fmt.Printf("Authentication failed: %v\n", errWait)
+			return
+		}
+		if !IsOAuthSessionPending(state, "zai") {
+			return
+		}
+
+		apiKey, baseURL, errMint := zaiAuth.MintAPIKey(ctx, ready)
+		if errMint != nil {
+			SetOAuthSessionError(state, oauthSessionErrorWithCause("Failed to provision API key", errMint))
+			fmt.Printf("Failed to provision API key: %v\n", errMint)
+			return
+		}
+
+		tokenStorage := zaiAuth.CreateTokenStorage(ready, apiKey, baseURL)
+		metadata := map[string]any{
+			"type":         "zai",
+			"provider":     provider,
+			"access_token": apiKey,
+			"base_url":     baseURL,
+			"timestamp":    time.Now().UnixMilli(),
+		}
+		if strings.TrimSpace(ready.ZAIAccessToken) != "" {
+			metadata["zai_access_token"] = ready.ZAIAccessToken
+		}
+		if strings.TrimSpace(ready.Email) != "" {
+			metadata["email"] = ready.Email
+		}
+		if strings.TrimSpace(ready.Name) != "" {
+			metadata["name"] = ready.Name
+		}
+		if strings.TrimSpace(ready.UserID) != "" {
+			metadata["user_id"] = ready.UserID
+		}
+
+		fileName := zaiauth.CredentialFileName(provider, ready.UserID, ready.Email)
+		label := strings.TrimSpace(ready.Email)
+		if label == "" {
+			label = strings.TrimSpace(ready.Name)
+		}
+		if label == "" {
+			label = fmt.Sprintf("Z.AI (%s)", provider)
+		}
+
+		record := &coreauth.Auth{
+			ID:       fileName,
+			Provider: "zai",
+			FileName: fileName,
+			Label:    label,
+			Storage:  tokenStorage,
+			Metadata: metadata,
+		}
+		savedPath, errSave := h.saveOAuthTokenRecord(ctx, state, "zai", record)
+		if errors.Is(errSave, errOAuthSessionNotPending) {
+			return
+		}
+		if errSave != nil {
+			log.Errorf("Failed to save authentication tokens: %v", errSave)
+			SetOAuthSessionError(state, "Failed to save authentication tokens")
+			return
+		}
+
+		fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
+		fmt.Println("You can now use Z.AI services through this CLI")
+		CompleteOAuthSession(state)
+	}()
+
+	c.JSON(200, gin.H{"status": "ok", "url": init.AuthorizeURL, "state": state})
+}
+
+func (h *Handler) watchManualZAICallback(state string, auth *zaiauth.ZAIAuth, stop <-chan struct{}) {
+	path := filepath.Join(h.cfg.AuthDir, fmt.Sprintf(".oauth-zai-%s.oauth", state))
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			data, errRead := os.ReadFile(path)
+			if errRead != nil {
+				continue
+			}
+			_ = os.Remove(path)
+			var m map[string]string
+			_ = json.Unmarshal(data, &m)
+			if code := strings.TrimSpace(m["code"]); code != "" {
+				auth.InjectCallback(code)
+			} else {
+				auth.InjectError(strings.TrimSpace(m["error"]))
+			}
+			return
+		}
+	}
 }
 
 // watchOAuthSessionCancel cancels pollCtx once the OAuth session is no longer pending.

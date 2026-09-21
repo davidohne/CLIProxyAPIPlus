@@ -201,6 +201,8 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/kilo-auth-url", s.mgmt.RequestKiloToken)
 		mgmt.GET("/kimi-auth-url", s.mgmt.RequestKimiToken)
 		mgmt.GET("/xai-auth-url", s.mgmt.RequestXAIToken)
+		mgmt.GET("/zai-auth-url", s.mgmt.RequestZAIToken)
+		mgmt.GET("/bigmodel-auth-url", s.mgmt.RequestBigModelToken)
 		mgmt.GET("/iflow-auth-url", s.mgmt.RequestIFlowToken)
 		mgmt.POST("/iflow-auth-url", s.mgmt.RequestIFlowCookieToken)
 		mgmt.GET("/kiro-auth-url", s.mgmt.RequestKiroToken)
