@@ -105,6 +105,7 @@ type commandModeOptions struct {
 	kiroImport         bool
 	kiroIDCLogin       bool
 	xaiLogin           bool
+	zaiLogin           bool
 	qoderLogin         bool
 }
 
@@ -132,6 +133,7 @@ func isOneShotCommandMode(opts commandModeOptions) bool {
 		opts.kiroImport ||
 		opts.kiroIDCLogin ||
 		opts.xaiLogin ||
+		opts.zaiLogin ||
 		opts.qoderLogin
 }
 
@@ -168,6 +170,8 @@ func main() {
 	var githubCopilotLogin bool
 	var codeBuddyLogin bool
 	var xaiLogin bool
+	var zaiLogin bool
+	var zaiProvider string
 	var qoderLogin bool
 	var projectID string
 	var vertexImport string
@@ -211,6 +215,8 @@ func main() {
 	flag.BoolVar(&githubCopilotLogin, "github-copilot-login", false, "Login to GitHub Copilot using device flow")
 	flag.BoolVar(&codeBuddyLogin, "codebuddy-login", false, "Login to CodeBuddy using browser OAuth flow")
 	flag.BoolVar(&xaiLogin, "xai-login", false, "Login to xAI using OAuth")
+	flag.BoolVar(&zaiLogin, "zai-login", false, "Login to Z.AI / ZCode coding plan using OAuth")
+	flag.StringVar(&zaiProvider, "zai-provider", "zai", "Identity provider for -zai-login: zai (international) or bigmodel (China mainland)")
 	flag.BoolVar(&qoderLogin, "qoder-login", false, "Login to Qoder using Enterprise PAT or OAuth device flow")
 	flag.StringVar(&projectID, "project_id", "", "Project ID (Gemini only, not required)")
 	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
@@ -726,6 +732,7 @@ func main() {
 		kiroImport:         kiroImport,
 		kiroIDCLogin:       kiroIDCLogin,
 		xaiLogin:           xaiLogin,
+		zaiLogin:           zaiLogin,
 		qoderLogin:         qoderLogin,
 	})
 	cloudConfigMissing := isCloudDeploy && !configFileExists
@@ -880,6 +887,8 @@ func main() {
 		cmd.DoKiroIDCLogin(cfg, options, kiroIDCStartURL, kiroIDCRegion, kiroIDCFlow)
 	} else if xaiLogin {
 		cmd.DoXAILogin(cfg, options)
+	} else if zaiLogin {
+		cmd.DoZAILogin(cfg, options, zaiProvider)
 	} else if qoderLogin {
 		cmd.DoQoderLogin(cfg, options)
 	} else {
