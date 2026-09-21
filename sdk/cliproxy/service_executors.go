@@ -209,6 +209,7 @@ func baselineExecutorAuths() []*coreauth.Auth {
 		"antigravity",
 		"devin",
 		"kimi",
+		"zai",
 		"xai",
 		"openai-compatibility",
 	}
@@ -311,6 +312,8 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
 		s.coreManager.RegisterExecutor(executor.NewGitLabExecutor(cfg))
 	case "qoder":
 		s.coreManager.RegisterExecutor(executor.NewQoderExecutor(cfg))
+	case "zai":
+		s.coreManager.RegisterExecutor(executor.NewZAIExecutor(cfg))
 	case "xai":
 		if !forceReplace {
 			existingExecutor, hasExecutor := s.coreManager.Executor("xai")
